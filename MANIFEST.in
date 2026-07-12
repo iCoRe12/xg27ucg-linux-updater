@@ -6,4 +6,5 @@ include PROTOCOL.md
 include SECURITY.md
 include xg27ucg-fw
 recursive-include .github *.yml *.yaml
+recursive-include tests/fixtures *.json
 global-exclude *.BIN *.bin *.exe *.dll *.zip

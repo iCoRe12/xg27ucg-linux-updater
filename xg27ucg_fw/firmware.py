@@ -6,13 +6,15 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterator
 
+from .profiles import EXPECTED_MODEL, FirmwareProfile, latest_flash_profile, profile_for_version
 
-EXPECTED_MODEL = "XG27UCG"
-EXPECTED_VERSION = "MCM104"
-EXPECTED_VERSION_NUMBER = 104
-EXPECTED_SIZE = 2_027_558
-EXPECTED_SHA256 = "b73131c26c48cb03e990170c50fb5363cad4e211af900ec146757164a30ebd9a"
-EXPECTED_CHECKSUM16 = 0x79F2
+
+_LATEST_PROFILE = latest_flash_profile()
+EXPECTED_VERSION = _LATEST_PROFILE.version
+EXPECTED_VERSION_NUMBER = _LATEST_PROFILE.version_number
+EXPECTED_SIZE = _LATEST_PROFILE.payload_size
+EXPECTED_SHA256 = _LATEST_PROFILE.payload_sha256
+EXPECTED_CHECKSUM16 = _LATEST_PROFILE.payload_checksum16
 
 MODEL_OFFSET = 0x1EF000
 VERSION_OFFSET = 0x1EF020
@@ -36,13 +38,15 @@ class FirmwareReport:
     total_transfer_bytes: int
     valid: bool
     errors: tuple[str, ...]
+    profile: FirmwareProfile | None
 
     @property
     def confirmation_token(self) -> str:
-        return f"{EXPECTED_MODEL}-{EXPECTED_VERSION}-{self.sha256[:8]}"
+        return f"{self.model or EXPECTED_MODEL}-{self.version or 'UNKNOWN'}-{self.sha256[:8]}"
 
     def to_dict(self) -> dict[str, object]:
         data = asdict(self)
+        data["profile"] = self.profile.to_dict() if self.profile else None
         data["checksum16_hex"] = f"0x{self.checksum16:04x}"
         data["confirmation_token"] = self.confirmation_token
         return data
@@ -88,6 +92,7 @@ def analyze_firmware(path: str | Path) -> FirmwareReport:
         else ""
     )
     version_number = int(version_digits) if version_digits.isdigit() else None
+    profile = profile_for_version(version_number) if version_number is not None else None
 
     full_blocks, remainder = divmod(len(data), BLOCK_SIZE)
     if remainder:
@@ -103,21 +108,24 @@ def analyze_firmware(path: str | Path) -> FirmwareReport:
     total_transfer = normal_blocks * BLOCK_SIZE + final_transfer
 
     errors: list[str] = []
-    if len(data) != EXPECTED_SIZE:
-        errors.append(f"unexpected size: {len(data)} (expected {EXPECTED_SIZE})")
-    if digest != EXPECTED_SHA256:
-        errors.append(f"unexpected SHA-256: {digest}")
-    if checksum != EXPECTED_CHECKSUM16:
-        errors.append(
-            f"unexpected additive checksum: 0x{checksum:04x} "
-            f"(expected 0x{EXPECTED_CHECKSUM16:04x})"
-        )
     if model != EXPECTED_MODEL:
         errors.append(f"firmware model is {model!r}, expected {EXPECTED_MODEL!r}")
-    if version != EXPECTED_VERSION:
-        errors.append(f"firmware version is {version!r}, expected {EXPECTED_VERSION!r}")
-    if data[VERSION_OFFSET:] != EXPECTED_VERSION.encode("ascii"):
-        errors.append("firmware footer does not end exactly with MCM104")
+    if profile is None:
+        errors.append(f"firmware version {version!r} has no reviewed profile")
+    else:
+        if len(data) != profile.payload_size:
+            errors.append(f"unexpected size: {len(data)} (expected {profile.payload_size})")
+        if digest != profile.payload_sha256:
+            errors.append(f"unexpected SHA-256: {digest}")
+        if checksum != profile.payload_checksum16:
+            errors.append(
+                f"unexpected additive checksum: 0x{checksum:04x} "
+                f"(expected 0x{profile.payload_checksum16:04x})"
+            )
+        if version != profile.version:
+            errors.append(f"firmware version is {version!r}, expected {profile.version!r}")
+        if data[VERSION_OFFSET:] != profile.version.encode("ascii"):
+            errors.append(f"firmware footer does not end exactly with {profile.version}")
 
     return FirmwareReport(
         path=str(firmware_path),
@@ -133,6 +141,7 @@ def analyze_firmware(path: str | Path) -> FirmwareReport:
         total_transfer_bytes=total_transfer,
         valid=not errors,
         errors=tuple(errors),
+        profile=profile,
     )
 
 

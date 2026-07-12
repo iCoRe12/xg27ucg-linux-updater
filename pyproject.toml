@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xg27ucg-linux-updater"
-version = "0.2.0"
-description = "Model-locked Linux firmware updater for ASUS XG27UCG MCM102 to MCM104"
+version = "0.3.0"
+description = "Profile-locked Linux firmware catalog and updater for ASUS XG27UCG"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "GPL-3.0-or-later"

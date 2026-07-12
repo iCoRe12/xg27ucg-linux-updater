@@ -84,6 +84,8 @@ def flash_firmware(
     report = analyze_firmware(firmware_path)
     if not report.valid:
         raise FlashError("firmware validation failed: " + "; ".join(report.errors))
+    if report.profile is None or not report.profile.flash_supported:
+        raise FlashError("firmware target profile is not enabled for writing")
     data = Path(report.path).read_bytes()
     blocks = list(iter_transfer_blocks(data))
 

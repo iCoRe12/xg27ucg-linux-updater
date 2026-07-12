@@ -16,6 +16,8 @@ from xg27ucg_fw.firmware import (
     iter_transfer_blocks,
     progress_cdb,
 )
+from xg27ucg_fw.profiles import MCM103, MCM104, latest_flash_profile, profile_for_version
+from xg27ucg_fw.updater import FlashError, flash_firmware
 
 
 OFFICIAL_FIRMWARE = Path(
@@ -24,9 +26,19 @@ OFFICIAL_FIRMWARE = Path(
         Path(__file__).resolve().parents[1] / "ASUS_XG27UCG_MCM104.BIN",
     )
 )
+OFFICIAL_FIRMWARE_103 = Path(os.environ.get("XG27UCG_TEST_FIRMWARE_103", "missing-mcm103.bin"))
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_reviewed_profile_matrix(self) -> None:
+        self.assertEqual(MCM104.allowed_source_versions, (102, 103))
+        self.assertEqual(MCM104.hardware_verified_source_versions, (102,))
+        self.assertTrue(MCM104.flash_supported)
+        self.assertFalse(MCM103.flash_supported)
+        self.assertIs(latest_flash_profile(), MCM104)
+        self.assertIs(profile_for_version("mcm104"), MCM104)
+        self.assertIsNone(profile_for_version(105))
+
     def test_protocol_vectors(self) -> None:
         self.assertEqual(filesize_cdb(EXPECTED_SIZE), bytes.fromhex("e8 08 1e f0 26"))
         self.assertEqual(checksum_cdb(EXPECTED_CHECKSUM16), bytes.fromhex("e8 0a 79 f2"))
@@ -76,6 +88,7 @@ class OfficialFirmwareTests(unittest.TestCase):
         self.assertEqual(report.final_transfer_bytes, 512)
         self.assertEqual(report.total_transfer_bytes, 2_028_032)
         self.assertEqual(report.confirmation_token, "XG27UCG-MCM104-b73131c2")
+        self.assertIs(report.profile, MCM104)
 
     def test_transfer_blocks_match_vendor_algorithm(self) -> None:
         blocks = list(iter_transfer_blocks(self.data))
@@ -101,6 +114,24 @@ class OfficialFirmwareTests(unittest.TestCase):
         self.assertFalse(report.valid)
         self.assertTrue(any("SHA-256" in error for error in report.errors))
         self.assertTrue(any("checksum" in error for error in report.errors))
+
+
+class OfficialMCM103FirmwareTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        if not OFFICIAL_FIRMWARE_103.exists():
+            raise unittest.SkipTest("official MCM103 test firmware is not present")
+
+    def test_official_mcm103_is_recognized_but_not_flash_enabled(self) -> None:
+        report = analyze_firmware(OFFICIAL_FIRMWARE_103)
+        self.assertTrue(report.valid, report.errors)
+        self.assertEqual(report.version, "MCM103")
+        self.assertEqual(report.sha256, MCM103.payload_sha256)
+        self.assertEqual(report.checksum16, MCM103.payload_checksum16)
+        self.assertIs(report.profile, MCM103)
+        self.assertFalse(report.profile.flash_supported)
+        with self.assertRaisesRegex(FlashError, "not enabled for writing"):
+            flash_firmware("/dev/null", OFFICIAL_FIRMWARE_103)
 
 
 if __name__ == "__main__":
