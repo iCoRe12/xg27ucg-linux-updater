@@ -1,12 +1,12 @@
-# Reconstructed XG27UCG MCM104 protocol
+# Reconstructed XG27UCG update protocol
 
 This is an independent interoperability record. It contains no ASUS firmware
 or ASUS source code. All multi-byte values below are shown exactly as submitted
 by the verified updater implementation.
 
 This document records the exact behavior recovered from ASUS's official
-Windows updater. It is specific to `XG27UCG`, source firmware `MCM102`, and
-target firmware `MCM104`.
+Windows updater. The transport is model-specific to `XG27UCG`; firmware
+profiles separately define reviewed sources and targets.
 
 ## Identity gates
 
@@ -20,6 +20,24 @@ target firmware `MCM104`.
   `b73131c26c48cb03e990170c50fb5363cad4e211af900ec146757164a30ebd9a`
 - Firmware footer at `0x1ef000`: `XG27UCG`
 - Firmware footer at `0x1ef020`: `MCM104`
+
+## Reusable-engine evidence
+
+ASUS's official MCM103 and MCM104 ZIPs contain byte-identical copies of all
+three inner update-engine components:
+
+- `FirmwareOneKeyUpdate.exe`:
+  `68708a7f44b43b19b8ffecff625b16f708accabfb8afe2a064fa3c460afaf2ba`
+- `FirmwareOneKeyUpdateLibrary.dll`:
+  `add611d5d41e2ddd702215ccc7f506461901ab424b6a308e494ffdd3e02aee06`
+- `MAPI/CLIBMTKUSB.dll`:
+  `d1499cc7fdf746ebf513d988c8159aa6184f1d49539eb49d53aada3048cee9b3`
+
+Both firmware payloads are complete 2,027,558-byte images with the same model
+and version-footer layout. Their payload hashes and additive checksums differ,
+as expected. This is why the Linux implementation treats the command transport
+as reusable while keeping package and upgrade permissions in versioned data
+profiles.
 
 ## Transport
 
@@ -41,7 +59,7 @@ the operation as successful only when both `DeviceIoControl` succeeds and
    bytes, so the Linux transport appends one zero control byte.
 
 2. Sum every firmware byte modulo 65536 and send it big-endian. For the
-   official image the sum is `0x79f2`:
+   official MCM104 image the sum is `0x79f2`:
 
    `e8 0a 79 f2`
 
@@ -84,7 +102,7 @@ VCP `0xFF` subsequently reported decimal 104.
 
 The official tool broadcasts VCP `0xDD` to every physical monitor. This Linux
 implementation targets only the one DDC bus whose EDID is exactly
-`AUS:XG27UCG`. It also refuses modified firmware, a different source firmware,
-a different USB VID/PID, a non-`GCREADER` SCSI device, mounted media, multiple
-matching devices, or a flash command without two explicit destructive-write
-gates.
+`AUS:XG27UCG`. It also refuses unreviewed package or payload identities,
+non-upgrade source/target pairs, a different USB VID/PID, a non-`GCREADER`
+SCSI device, mounted media, multiple matching devices, or a flash command
+without two explicit destructive-write gates.

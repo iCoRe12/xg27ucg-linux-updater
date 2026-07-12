@@ -1,0 +1,37 @@
+{
+  "Status": "SUCCESS",
+  "Message": "SUCCESS",
+  "Result": {
+    "Count": 2,
+    "Model": "XG27UCG",
+    "Obj": [
+      {
+        "Name": "Firmware",
+        "Files": [
+          {
+            "Version": "MCM104",
+            "Title": "ASUS_XG27UCG_MCM104",
+            "Description": "Bug fixes",
+            "FileSize": "2.16 MB",
+            "ReleaseDate": "2025/05/12",
+            "DownloadUrl": {
+              "Global": "/pub/ASUS/LCD Monitors/XG27UCG/ASUS_XG27UCG_MCM104.zip"
+            },
+            "sha256": "413114148964542DE4580C642008FD43093398DC65008EBA7564D938CB46B432"
+          },
+          {
+            "Version": "MCM103",
+            "Title": "ASUS_XG27UCG_MCM103",
+            "Description": "Bug fixes",
+            "FileSize": "2.16 MB",
+            "ReleaseDate": "2025/01/06",
+            "DownloadUrl": {
+              "Global": "/pub/ASUS/LCD Monitors/XG27UCG/ASUS_XG27UCG_MCM103.zip"
+            },
+            "sha256": "FC9D4CB71DB500D2A89BEFF9AECE8D83AE5B0B40EDF39A40B96A0E59351E3E2B"
+          }
+        ]
+      }
+    ]
+  }
+}
