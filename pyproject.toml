@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xg27ucg-linux-updater"
+version = "0.2.0"
+description = "Model-locked Linux firmware updater for ASUS XG27UCG MCM102 to MCM104"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [{ name = "Marc Sattelberger" }]
+keywords = ["asus", "firmware", "linux", "monitor", "scsi", "ddc-ci"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: System :: Hardware",
+]
+
+[project.urls]
+Homepage = "https://github.com/iCoRe12/xg27ucg-linux-updater"
+Issues = "https://github.com/iCoRe12/xg27ucg-linux-updater/issues"
+
+[project.scripts]
+xg27ucg-fw = "xg27ucg_fw.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["xg27ucg_fw*"]

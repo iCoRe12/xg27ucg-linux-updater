@@ -1,0 +1,9 @@
+include CHANGELOG.md
+include CONTRIBUTING.md
+include FLASH-RESULT-2026-07-12.md
+include NOTICE.md
+include PROTOCOL.md
+include SECURITY.md
+include xg27ucg-fw
+recursive-include .github *.yml *.yaml
+global-exclude *.BIN *.bin *.exe *.dll *.zip
