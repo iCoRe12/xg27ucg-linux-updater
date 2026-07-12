@@ -2,7 +2,7 @@
 
 All notable project changes are documented here.
 
-## 0.3.0 - Unreleased
+## 0.3.0 - 2026-07-12
 
 - Added live installed-versus-latest checks against ASUS's official firmware
   API.
