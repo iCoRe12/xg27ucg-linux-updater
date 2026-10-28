@@ -2,6 +2,15 @@
 
 All notable project changes are documented here.
 
+## Unreleased
+
+- Independently checked ASUS's MCM106 package and added a pinned inspection-only
+  profile. Package extraction and analysis are available; MCM106 flashing and
+  MCM101 flash sources remain blocked pending further review.
+- Added a temporary USB diagnostic command for unreviewed source versions,
+  with automatic cleanup attempts, redacted identity output and no firmware
+  transfer. Physical MCM101 validation remains open.
+
 ## 0.3.0 - 2026-07-12
 
 - Added live installed-versus-latest checks against ASUS's official firmware

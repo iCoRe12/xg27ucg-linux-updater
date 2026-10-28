@@ -14,5 +14,5 @@ dist/
 *.bin
 *.exe
 *.dll
-ASUS_XG27UCG_MCM104.zip
+ASUS_XG27UCG_MCM*.zip
 asus-mcm104/

@@ -48,6 +48,7 @@ from .updater import FlashError, flash_firmware
 
 USB_ON_TOKEN = "XG27UCG-USB-ON"
 USB_OFF_TOKEN = "XG27UCG-USB-OFF"
+USB_DIAGNOSTIC_TOKEN = "XG27UCG-USB-DIAGNOSTIC"
 
 
 def _hex(data: bytes) -> str:
@@ -151,11 +152,12 @@ def command_check(args: argparse.Namespace) -> int:
             f"outer SHA-256 {newest.sha256}"
         )
         print(f"State: {state}")
-        support = (
-            "reviewed for flashing"
-            if newest.reviewed_for_flash
-            else "download only; profile review required"
-        )
+        if newest.reviewed_for_flash:
+            support = "reviewed for flashing"
+        elif newest.profile:
+            support = "package inspected; flashing blocked"
+        else:
+            support = "download only; profile review required"
         print(f"Linux profile: {support}")
         if update_available:
             print(f"Next: xg27ucg-fw download --version {newest.version} --prepare")
@@ -389,6 +391,140 @@ def command_probe(args: argparse.Namespace) -> int:
     return 0 if result["ready_to_flash"] else 3
 
 
+def _diagnostic_usb_count() -> int:
+    """Count updater USB devices even when no sg driver is loaded."""
+    devices = Path("/sys/bus/usb/devices")
+    if not devices.is_dir():
+        raise DdcError("USB sysfs is unavailable")
+    count = 0
+    for vendor_path in devices.glob("*/idVendor"):
+        try:
+            vendor = int(vendor_path.read_text().strip(), 16)
+            product = int(vendor_path.with_name("idProduct").read_text().strip(), 16)
+        except FileNotFoundError:
+            # A disappearing USB device makes a safety decision ambiguous.
+            raise DdcError("USB enumeration changed during inspection") from None
+        if (vendor, product) == (TARGET_USB_VID, TARGET_USB_PID):
+            count += 1
+    return count
+
+
+def command_diagnose_usb(args: argparse.Namespace) -> int:
+    """Temporarily toggle DDC update mode and issue standard INQUIRY only."""
+    if args.confirm != USB_DIAGNOSTIC_TOKEN:
+        print(
+            f"Refusing DDC write. Re-run with --confirm {USB_DIAGNOSTIC_TOKEN}",
+            file=sys.stderr,
+        )
+        return 4
+    result: dict[str, Any] = {
+        "tool_version": __version__,
+        "diagnostic_only": True,
+        "ready_to_flash": False,
+        "monitor": None,
+        "usb_identity_verified": False,
+        "cleanup_attempted": False,
+        "cleanup_verified": False,
+        "errors": [],
+    }
+    monitor = None
+    original_firmware = None
+    original_switch = None
+    enable_attempted = False
+    stage = "monitor identity preflight"
+    try:
+        monitor = select_target_monitor(args.bus)
+        if not monitor.serial:
+            stage = "monitor identity preflight (stable serial is required)"
+            raise DdcError("monitor serial is unavailable")
+        original_firmware = get_firmware_number(monitor.bus)
+        original_switch = get_vcp(monitor.bus, 0xDD)
+        result["monitor"] = {
+            "manufacturer": monitor.manufacturer,
+            "model": monitor.model,
+            "bus": monitor.bus,
+            "firmware_version": f"MCM{original_firmware}",
+        }
+        stage = "USB preflight"
+        if _diagnostic_usb_count() or discover_target_devices():
+            stage = "USB preflight (updater endpoint is already present)"
+            raise DdcError("an updater endpoint is already present")
+        # Check the exact same DDC identity again immediately before writing.
+        stage = "monitor identity recheck before enable"
+        if select_target_monitor(monitor.bus) != monitor:
+            raise DdcError("monitor identity changed")
+        stage = "enable update mode"
+        # A failed/timed-out DDC request may already have reached the monitor.
+        enable_attempted = True
+        set_usb_update_mode(monitor.bus, True)
+        stage = "USB enumeration"
+        time.sleep(2)
+        devices = discover_target_devices()
+        if _diagnostic_usb_count() != 1 or len(devices) != 1:
+            raise DdcError("expected exactly one USB updater and one sg endpoint")
+        stage = "read-only USB/SCSI identity probe"
+        probe = _probe_usb_device(devices[0])
+        if not probe.get("ready"):
+            raise DdcError("USB/SCSI identity or mount checks failed")
+        # Only publish fixed identity fields. Serial, sysfs, raw responses and
+        # exception text can contain identifying data and are deliberately omitted.
+        result["usb_identity_verified"] = True
+        result["usb"] = {
+            "vid": f"{TARGET_USB_VID:04x}",
+            "pid": f"{TARGET_USB_PID:04x}",
+            "scsi_vendor": "GCREADER",
+        }
+    except (Exception, KeyboardInterrupt) as error:
+        result["errors"].append(f"{stage} failed ({type(error).__name__})")
+    finally:
+        if enable_attempted and monitor is not None:
+            result["cleanup_attempted"] = True
+            cleanup_stage = "monitor identity recheck before disable"
+            try:
+                if select_target_monitor(monitor.bus) != monitor:
+                    raise DdcError("monitor identity changed; refusing cleanup write")
+                cleanup_stage = "disable update mode"
+                set_usb_update_mode(monitor.bus, False)
+                cleanup_stage = "verify cleanup"
+                time.sleep(2)
+                if _diagnostic_usb_count() or discover_target_devices():
+                    raise DdcError("USB updater endpoint remains present")
+                if select_target_monitor(monitor.bus) != monitor:
+                    raise DdcError("monitor identity changed after cleanup")
+                if get_firmware_number(monitor.bus) != original_firmware:
+                    raise DdcError("installed firmware changed")
+                if get_vcp(monitor.bus, 0xDD) != original_switch:
+                    raise DdcError("VCP response did not return to its original state")
+                # Do not assume that VCP current=0 means disabled: compare the
+                # original response and require disappearance of the USB endpoint.
+                result["cleanup_verified"] = True
+            except (Exception, KeyboardInterrupt) as error:
+                result["errors"].append(
+                    f"{cleanup_stage} failed ({type(error).__name__})"
+                )
+            if not result["cleanup_verified"]:
+                result["recovery"] = (
+                    "Confirm the same physical XG27UCG is connected on this bus, then run "
+                    f"./xg27ucg-fw usb-off --bus {monitor.bus} --confirm {USB_OFF_TOKEN}. "
+                    "If it fails, keep the monitor connected and report the failure; "
+                    "do not attempt flashing."
+                )
+    result["success"] = (
+        result["usb_identity_verified"] and result["cleanup_verified"] and not result["errors"]
+    )
+    if args.json:
+        print(json.dumps(result, indent=2, sort_keys=True))
+    else:
+        print("USB transport diagnostic only; firmware flashing remains blocked by its profiles.")
+        print(f"USB/SCSI identity: {'VERIFIED' if result['usb_identity_verified'] else 'NOT VERIFIED'}")
+        print(f"Cleanup: {'VERIFIED' if result['cleanup_verified'] else 'NOT VERIFIED'}")
+        for error in result["errors"]:
+            print(f"  - {error}")
+        if result.get("recovery"):
+            print(result["recovery"])
+    return 0 if result["success"] else 5
+
+
 def command_verify(args: argparse.Namespace) -> int:
     try:
         target = profile_for_version(args.target)
@@ -611,6 +747,15 @@ def build_parser() -> argparse.ArgumentParser:
     probe.add_argument("--device", help="explicit SCSI-generic node, for example /dev/sg2")
     probe.add_argument("--json", action="store_true")
     probe.set_defaults(function=command_probe)
+
+    diagnostic = subparsers.add_parser(
+        "diagnose-usb",
+        help="temporarily toggle USB update mode, read identity only, then restore it",
+    )
+    diagnostic.add_argument("--bus", type=int)
+    diagnostic.add_argument("--confirm", required=True)
+    diagnostic.add_argument("--json", action="store_true")
+    diagnostic.set_defaults(function=command_diagnose_usb)
 
     verify = subparsers.add_parser("verify", help="read the installed monitor firmware version")
     verify.add_argument("--bus", type=int)
