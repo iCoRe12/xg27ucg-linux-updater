@@ -122,6 +122,39 @@ cd xg27ucg-linux-updater
 
 An optional isolated install can be made with `pipx install .`.
 
+## macOS port: developers and hardware testers wanted
+
+The catalog, download, package verification, firmware analysis, safety
+profiles, and transfer protocol are portable. The current hardware backends
+are intentionally Linux-only: DDC/CI uses `ddcutil`, updater-device discovery
+uses sysfs and `/dev/sgX`, and vendor SCSI commands use `SG_IO`.
+
+A native macOS port is planned, with Apple silicon connected through
+USB-C-to-DisplayPort as the most useful first target. It needs:
+
+- a macOS DDC/CI backend for reading the installed version and sending the
+  update-mode VCP command;
+- an IOKit `SCSITaskDeviceInterface` backend that discovers USB `0b05:1b9c`,
+  verifies `GCREADER`, obtains exclusive access, and submits the reviewed
+  vendor CDBs; and
+- macOS power-management inhibition and repeatable build/CI coverage.
+
+We are looking for macOS developers or careful hardware testers who have an
+XG27UCG, its separate USB data cable, and preferably an Apple-silicon Mac. An
+initial contributor does **not** need to attempt a firmware write. Safe first
+steps are compiling the backend and collecting redacted, read-only device,
+DDC/CI, and SCSI identity results.
+
+If you can help, [open a macOS port issue](https://github.com/iCoRe12/xg27ucg-linux-updater/issues/new?title=macOS%20port%20tester%20or%20developer)
+and include your Mac model/architecture, macOS version, display connection,
+installed monitor firmware, and whether you can build or run diagnostic code.
+Do not post the monitor serial number.
+
+> [!IMPORTANT]
+> macOS flashing will remain disabled until the native transport has been
+> reviewed and exercised against real hardware. Nobody should run an
+> unreviewed destructive test or bypass the existing write-safety gates.
+
 ## Firmware update procedure
 
 First check the connected monitor and prepare the latest reviewed release:
