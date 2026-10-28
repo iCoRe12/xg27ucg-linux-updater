@@ -7,11 +7,12 @@ import unittest
 from pathlib import Path
 
 from xg27ucg_fw.package import prepare_package
-from xg27ucg_fw.profiles import MCM103, MCM104
+from xg27ucg_fw.profiles import MCM103, MCM104, MCM106
 
 
 PACKAGE_104 = Path(os.environ.get("XG27UCG_TEST_PACKAGE", "missing-mcm104.zip"))
 PACKAGE_103 = Path(os.environ.get("XG27UCG_TEST_PACKAGE_103", "missing-mcm103.zip"))
+PACKAGE_106 = Path(os.environ.get("XG27UCG_TEST_PACKAGE_106", "missing-mcm106.zip"))
 
 
 class OfficialPackageTests(unittest.TestCase):
@@ -30,6 +31,10 @@ class OfficialPackageTests(unittest.TestCase):
 
     def test_mcm103_package_uses_the_same_reviewed_engine(self) -> None:
         self._verify_package(PACKAGE_103, MCM103)
+
+    def test_mcm106_package_is_inspection_only(self) -> None:
+        self._verify_package(PACKAGE_106, MCM106)
+        self.assertFalse(MCM106.flash_supported)
 
 
 if __name__ == "__main__":

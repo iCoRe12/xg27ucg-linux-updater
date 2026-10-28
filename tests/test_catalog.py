@@ -70,6 +70,26 @@ class CatalogTests(unittest.TestCase):
         self.assertIn("model=XG27UCG", seen_urls[0])
         self.assertIn("website=en-us", seen_urls[0])
 
+    def test_new_mcm106_catalog_is_inspectable_but_not_flash_enabled(self) -> None:
+        document = copy.deepcopy(self.document)
+        item = copy.deepcopy(document["Result"]["Obj"][0]["Files"][0])
+        item.update(
+            Version="MCM106",
+            Title="ASUS_XG27UCG_MCM106",
+            ReleaseDate="2026/08/18",
+            sha256="5c6b6fc19fa1d7675b279ff0155e55198611687bf7f2bcab0e1614eb7e4592c7",
+            DownloadUrl={
+                "Global": "/pub/ASUS/LCD Monitors/XG27UCG/ASUS_XG27UCG_MCM106.zip"
+            },
+        )
+        document["Result"]["Obj"][0]["Files"].insert(0, item)
+        newest = latest_release(parse_catalog_document(document))
+        self.assertEqual(newest.version, "MCM106")
+        self.assertIsNotNone(newest.profile)
+        self.assertFalse(newest.reviewed_for_flash)
+        # A different package under the same version cannot acquire this profile.
+        self.assertIsNone(replace(newest, sha256="0" * 64).profile)
+
     def test_catalog_rejects_wrong_model_path_and_hash(self) -> None:
         wrong_model = copy.deepcopy(self.document)
         wrong_model["Result"]["Model"] = "OTHER"

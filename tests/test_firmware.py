@@ -16,7 +16,7 @@ from xg27ucg_fw.firmware import (
     iter_transfer_blocks,
     progress_cdb,
 )
-from xg27ucg_fw.profiles import MCM103, MCM104, latest_flash_profile, profile_for_version
+from xg27ucg_fw.profiles import MCM103, MCM104, MCM106, latest_flash_profile, profile_for_version
 from xg27ucg_fw.updater import FlashError, flash_firmware
 
 
@@ -27,6 +27,7 @@ OFFICIAL_FIRMWARE = Path(
     )
 )
 OFFICIAL_FIRMWARE_103 = Path(os.environ.get("XG27UCG_TEST_FIRMWARE_103", "missing-mcm103.bin"))
+OFFICIAL_FIRMWARE_106 = Path(os.environ.get("XG27UCG_TEST_FIRMWARE_106", "missing-mcm106.bin"))
 
 
 class ProtocolTests(unittest.TestCase):
@@ -35,6 +36,9 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(MCM104.hardware_verified_source_versions, (102,))
         self.assertTrue(MCM104.flash_supported)
         self.assertFalse(MCM103.flash_supported)
+        self.assertFalse(MCM106.flash_supported)
+        self.assertEqual(MCM106.allowed_source_versions, ())
+        self.assertEqual(MCM106.hardware_verified_source_versions, ())
         self.assertIs(latest_flash_profile(), MCM104)
         self.assertIs(profile_for_version("mcm104"), MCM104)
         self.assertIsNone(profile_for_version(105))
@@ -132,6 +136,18 @@ class OfficialMCM103FirmwareTests(unittest.TestCase):
         self.assertFalse(report.profile.flash_supported)
         with self.assertRaisesRegex(FlashError, "not enabled for writing"):
             flash_firmware("/dev/null", OFFICIAL_FIRMWARE_103)
+
+
+class OfficialMCM106FirmwareTests(unittest.TestCase):
+    def test_inspected_mcm106_cannot_be_flashed(self) -> None:
+        if not OFFICIAL_FIRMWARE_106.exists():
+            self.skipTest("official MCM106 test firmware is not present")
+        report = analyze_firmware(OFFICIAL_FIRMWARE_106)
+        self.assertTrue(report.valid, report.errors)
+        self.assertIs(report.profile, MCM106)
+        self.assertFalse(report.profile.flash_supported)
+        with self.assertRaisesRegex(FlashError, "not enabled for writing"):
+            flash_firmware("/dev/null", OFFICIAL_FIRMWARE_106)
 
 
 if __name__ == "__main__":

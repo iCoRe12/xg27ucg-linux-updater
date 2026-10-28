@@ -34,12 +34,16 @@ unreviewed vendor package into an immediate hardware experiment.
 | MCM103 | MCM102 | Official package and engine inspected; no Linux hardware flash | Obsolete target, blocked |
 | MCM104 | MCM102 | Successfully flashed and post-reboot verified on hardware | Enabled |
 | MCM104 | MCM103 | Same full-image package and byte-identical ASUS update engine | Enabled, vendor-inferred |
+| MCM106 | None | Official package, engine and payload inspected; no Linux hardware flash | Inspection only, blocked |
 
-A future MCM105 will be visible and downloadable immediately through the ASUS
-catalog command. Flashing remains blocked until its package, embedded updater
-engine, firmware layout, and upgrade sources have a reviewed profile. Adding a
-reviewed release is data-driven in `xg27ucg_fw/profiles.py`; the SCSI engine does
-not need to be rewritten when ASUS keeps the protocol unchanged.
+Newer releases are visible and downloadable through the ASUS catalog command.
+Flashing remains blocked until the package, embedded updater engine, firmware
+layout, and upgrade sources have a reviewed profile. MCM106 can be prepared
+for inspection, but has no enabled upgrade sources and cannot be flashed.
+See [the MCM106 review](docs/MCM106-REVIEW.md) for the evidence and remaining
+hardware-validation requirements. Profiles are data-driven in
+`xg27ucg_fw/profiles.py`; an unchanged ASUS protocol does not require rewriting
+the SCSI engine.
 
 Show the locally reviewed matrix at any time:
 
@@ -55,13 +59,13 @@ Connect the normal display cable. The following command performs no writes:
 ./xg27ucg-fw check
 ```
 
-Example on an updated monitor:
+Example with MCM104 installed and an inspection-only catalog release:
 
 ```text
 Installed: XG27UCG MCM104
-ASUS latest: MCM104 (2025-05-12), outer SHA-256 41311414...
-State: UP TO DATE
-Linux profile: reviewed for flashing
+ASUS latest: MCM106 (2026-08-18), outer SHA-256 5c6b6fc1...
+State: UPDATE AVAILABLE
+Linux profile: package inspected; flashing blocked
 ```
 
 The result can also be consumed as JSON:
@@ -157,11 +161,13 @@ Do not post the monitor serial number.
 
 ## Firmware update procedure
 
-First check the connected monitor and prepare the latest reviewed release:
+First check the connected monitor and explicitly prepare the flash-enabled
+MCM104 release. The latest catalog release may be inspection-only; preparing
+MCM106 does not authorize writing it:
 
 ```bash
 ./xg27ucg-fw check
-./xg27ucg-fw download --version latest --prepare --output ./firmware
+./xg27ucg-fw download --version MCM104 --prepare --output ./firmware
 ```
 
 Probe the monitor, payload, USB VID/PID, and SCSI identity. Before USB update
@@ -221,6 +227,45 @@ If update mode was enabled but no flash was started, disable it again:
 ```bash
 ./xg27ucg-fw usb-off --confirm XG27UCG-USB-OFF
 ```
+
+## USB transport diagnosis for unreviewed source firmware
+
+`diagnose-usb` temporarily changes the monitor's DDC/CI update-mode switch,
+checks USB `0b05:1b9c` and standard SCSI INQUIRY identity, then attempts to
+turn update mode off again. It sends no firmware size, checksum, progress or
+write commands. It can inspect an unreviewed source such as MCM101 without
+adding that source to the flash-enabled profiles.
+
+This command changes device state and therefore requires its own confirmation.
+Connect exactly one XG27UCG with its display and USB data cables, load `sg`,
+and leave the monitor connected throughout the diagnostic:
+
+```bash
+sudo modprobe sg
+sudo ./xg27ucg-fw diagnose-usb \
+  --confirm XG27UCG-USB-DIAGNOSTIC \
+  --json
+```
+
+Use `--bus N` if more than one XG27UCG is connected. The diagnostic refuses
+an existing updater endpoint, a missing monitor serial identity, or ambiguous
+USB devices. It checks the monitor identity again before each DDC write and
+opens SCSI read-only. Its JSON omits monitor and USB serial numbers and USB
+sysfs paths.
+
+Cleanup is successful only when the updater endpoint is absent, the original
+DDC switch response is restored, and the original firmware is still reported.
+Cleanup is best-effort: process termination, loss of power, or disconnected
+cables can prevent it from running or being verified.
+The tool does not assume that a VCP current value of zero means update mode is
+disabled. On cleanup failure it exits unsuccessfully and prints a bus-specific
+`usb-off` recovery command. Confirm that the same physical monitor is still
+on that bus before running it. Do not proceed to flashing after a failure.
+
+The diagnostic always reports `ready_to_flash: false`. Its software tests do
+not establish physical MCM101 transport compatibility: a real MCM101 device
+result is still required. No unreviewed source or MCM106 write permission is
+granted by this command.
 
 ## Trust and safety chain
 

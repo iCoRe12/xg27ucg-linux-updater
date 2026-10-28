@@ -78,7 +78,26 @@ MCM104 = FirmwareProfile(
     ),
 )
 
-PROFILES = (MCM103, MCM104)
+MCM106 = FirmwareProfile(
+    model=EXPECTED_MODEL,
+    version="MCM106",
+    version_number=106,
+    payload_size=2_027_558,
+    payload_sha256="02f3c88fdc9d45f1d4174cd428b2a874b5ea23c75a1154c4501549612d4f311c",
+    payload_checksum16=0x54B7,
+    outer_filename="ASUS_XG27UCG_MCM106.zip",
+    outer_sha256="5c6b6fc19fa1d7675b279ff0155e55198611687bf7f2bcab0e1614eb7e4592c7",
+    release_date="2026-08-18",
+    allowed_source_versions=(),
+    hardware_verified_source_versions=(),
+    flash_supported=False,
+    evidence=(
+        "official package independently inspected; identical MCM103/MCM104 engine; "
+        "inspection only, no source versions approved and no live Linux flash"
+    ),
+)
+
+PROFILES = (MCM103, MCM104, MCM106)
 PROFILE_BY_VERSION_NUMBER = {profile.version_number: profile for profile in PROFILES}
 PROFILE_BY_OUTER_SHA256 = {profile.outer_sha256: profile for profile in PROFILES}
 
